@@ -24,6 +24,9 @@
 #   go-tests = true
 #   unused-packages = true
 
+[[constraint]]
+  branch = "0.9"
+  name = "github.com/childe/healer"
 
 [[constraint]]
   branch = "master"
