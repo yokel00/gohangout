@@ -166,7 +166,7 @@ func (c *ClickhouseOutput) setColumnDefault() {
 				if e == nil {
 					c.defaultValue[columnName] = i
 				} else {
-					glog.Fatalf("parse default value `%v` error: %v", e)
+					glog.Fatalf("parse default value `%v` error: %v", defaultValue, e)
 				}
 			}
 		case "Float32", "Float64":
@@ -177,7 +177,7 @@ func (c *ClickhouseOutput) setColumnDefault() {
 				if e == nil {
 					c.defaultValue[columnName] = i
 				} else {
-					glog.Fatalf("parse default value `%v` error: %v", e)
+					glog.Fatalf("parse default value `%v` error: %v", defaultValue, e)
 				}
 			}
 		case "IPv4":
