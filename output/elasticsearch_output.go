@@ -332,13 +332,7 @@ func newElasticsearchOutput(config map[interface{}]interface{}) topology.Output 
 	var hosts []string = make([]string, 0)
 	if v, ok := config["hosts"]; ok {
 		for _, h := range v.([]interface{}) {
-			user, password, host := getUserPasswordAndHost(h.(string))
-			if host == "" {
-				glog.Fatalf("invalid host: %q", host)
-			}
-			rst.user = user
-			rst.password = password
-			hosts = append(hosts, host)
+            hosts = append(hosts, h.(string))
 		}
 	} else {
 		glog.Fatal("hosts must be set in elasticsearch output")
@@ -377,7 +371,7 @@ func newElasticsearchOutput(config map[interface{}]interface{}) topology.Output 
 			}()
 		}
 	}
-	rst.bulkProcessor = NewHTTPBulkProcessor(headers, rst.assebleHosts(), requestMethod, retryResponseCode, bulk_size, bulk_actions, flush_interval, concurrent, compress, f, esGetRetryEvents)
+    rst.bulkProcessor = NewHTTPBulkProcessor(headers, rst.hosts, requestMethod, retryResponseCode, bulk_size, bulk_actions, flush_interval, concurrent, compress, f, esGetRetryEvents)
 	return rst
 }
 
