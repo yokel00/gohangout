@@ -1,0 +1,54 @@
+inputs:
+  #- Stdin:
+  #    codec: json:not_usenumber
+  - Kafka:
+      decorate_events: false
+      topic:
+        syf_log_cdkey: 1
+      #assign:
+      #   weblog: [0,9]
+      codec: json
+      consumer_settings:
+        bootstrap.servers: "113.125.74.232:9092"
+        #bootstrap.servers: "kafka.banagame.com:9092"
+        group.id: gohangout.syf_log_cdkey1234
+        max.partition.fetch.bytes: "10485760"
+        auto.commit.interval.ms: "5000"
+        from.beginning: "true"
+        # sasl.mechanism: PLAIN
+        # sasl.user: admin
+        # sasl.password: admin-secret
+
+filters:
+  - Remove:
+      fields: ["@timestamp", "@metadata"]
+
+  #- Date:
+  #    location: Asia/Shanghai
+  #    src: crt_time
+  #    #target: crt_time
+  #    formats:
+  #      - "RFC3339"
+  #      #- "2006-01-02T15:04:05"
+  #      #- "2006-01-02T15:04:05Z07:00"
+  #      - "2006-01-02T15:04:05+07:00"
+  #      #- "2006-01-02T15:04:05Z0700"
+  #      #- "2006-01-02T15:04:05+0700"
+  #      - "2006-01-02"
+  #      #- "UNIX"
+  #      #- "UNIX_MS"
+  #    #
+outputs:
+  - Stdout: {}
+  #- Clickhouse:
+  #    debug: true
+  #    table: "gamelog.syf_log_cdkey"
+  #    #conn_max_life_time: 1800
+  #    username: "default"
+  #    password: "qE92QEPUxNsGWQ2c"
+  #    hosts:
+  #      - "tcp://113.125.74.232:9000"
+  #    fields: ["log_time", "cdkey", "os", "action", "ip"]
+  #    bulk_actions: 20000
+  #    flush_interval: 30
+  #    concurrent: 1
