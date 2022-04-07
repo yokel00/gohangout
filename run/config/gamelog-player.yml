@@ -5,15 +5,15 @@ inputs:
   - Kafka:
       decorate_events: false
       topic:
-        syf_log_user: 1
+        bngame_player_log_v0_0_1: 1
+#        bngame_account_log_v0_0_1: 1
       #assign:
       #   weblog: [0,9]
       codec: json
       consumer_settings:
         bootstrap.servers: "113.125.74.232:9092"
         #bootstrap.servers: "kafka.banagame.com:9092"
-        group.id: gohangout.syf_log_user
-#gohangout.syf_log_user
+        group.id: bana.172.16.0.1191
         max.partition.fetch.bytes: "10485760"
         auto.commit.interval.ms: "5000"
         from.beginning: "true"
@@ -41,15 +41,16 @@ filters:
   #      #- "UNIX_MS"
   #    #
 outputs:
-  - Stdout: {}
+  #- Stdout: {}
   - Clickhouse:
-      debug: true
-      table: "gamelog.syf_log_user"
+      #debug: true
+      table: "gamelog.player_log"
+      log_topic: "bngame_player_log_v0_0_1"
       #conn_max_life_time: 1800
-      username: "default"
-      password: "qE92QEPUxNsGWQ2c"
+      #username: "default"
+      #password: "qE92QEPUxNsGWQ2c"
       hosts:
-        - "tcp://113.125.74.232:9000"
-      bulk_actions: 1000
-      flush_interval: 5
+        - "tcp://127.0.0.1:9000"
+      bulk_actions: 2000
+      flush_interval: 30
       concurrent: 1

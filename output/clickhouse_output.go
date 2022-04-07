@@ -30,6 +30,7 @@ type ClickhouseOutput struct {
 	table        string
 	username     string
 	password     string
+	logTopic     string
 
 	fieldsLength int
 	query        string
@@ -174,7 +175,7 @@ func (c *ClickhouseOutput) setColumnDefault() {
 			}
 		case "Float32", "Float64":
 			if defaultValue == nil {
-				c.defaultValue[columnName] = 0
+				c.defaultValue[columnName] = float32(0)
 			} else {
 				i, e := strconv.ParseFloat(*defaultValue, 64)
 				if e == nil {
@@ -267,7 +268,15 @@ func newClickhouseOutput(config map[interface{}]interface{}) topology.Output {
 	if v, ok := config["debug"]; ok {
 		debug = v.(bool)
 	}
+	/* 22.3.7支持kafka消息频道
+	 */
+	if v, ok := config["log_topic"]; ok {
+		p.logTopic = v.(string)
+	} else {
+		glog.Fatalf("kafka_topic must be set in clickhouse output")
+	}
 
+	/* 2022.3.2注释：支持动态字段
 	if v, ok := config["fields"]; ok {
 		for _, f := range v.([]interface{}) {
 			p.fields = append(p.fields, f.(string))
@@ -290,7 +299,7 @@ func newClickhouseOutput(config map[interface{}]interface{}) topology.Output {
 	}
 	p.query = fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", p.table, strings.Join(fields, ","), strings.Join(questionMarks, ","))
 	glog.V(5).Infof("query: %s", p.query)
-
+	*/
 	connMaxLifetime := 0
 	if v, ok := config["conn_max_life_time"]; ok {
 		connMaxLifetime = v.(int)
@@ -328,7 +337,25 @@ func newClickhouseOutput(config map[interface{}]interface{}) topology.Output {
 	p.dbSelector = NewRRHostSelector(dbsI, 3)
 
 	p.setColumnDefault()
-
+	/* 2022.3.2 新增：支持动态字段
+	line:[334,348]
+	*/
+	p.fieldsLength = len(p.desc)
+	fields := make([]string, p.fieldsLength)
+	p.fields = make([]string, p.fieldsLength)
+	k := 0
+	for columnName := range p.desc {
+		fields[k] = fmt.Sprintf(`"%s"`, columnName)
+		p.fields[k] = columnName
+		k++
+	}
+	questionMarks := make([]string, p.fieldsLength)
+	for i := 0; i < p.fieldsLength; i++ {
+		questionMarks[i] = "?"
+	}
+	p.query = fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", p.table, strings.Join(fields, ","), strings.Join(questionMarks, ","))
+	glog.V(5).Infof("query: %s", p.query)
+	//
 	concurrent := 1
 	if v, ok := config["concurrent"]; ok {
 		concurrent = v.(int)
@@ -403,13 +430,27 @@ func (c *ClickhouseOutput) innerFlush(events []map[string]interface{}) {
 		defer stmt.Close()
 
 		for _, event := range events {
+			/*22.3.7 过滤 kafka_topic
+			 */
+			//if topic, ok := event["log_topic"]; ok && topic == c.logTopic {
 			args := make([]interface{}, c.fieldsLength)
 			for i, field := range c.fields {
-				if v, ok := event[field]; ok && v != nil {
-					args[i] = v
+				if v1, ok := event[field]; ok && v1 != nil {
+					/* 2022.3.2 动态字段，类型转换
+					注释: line 431
+					新增：line [432,438]
+					*/
+					//args[i] = v
+					ct := c.desc[field]
+					v2, err := convertCkType(ct.Type, v1)
+					if err == nil {
+						args[i] = v2
+					} else {
+						args[i] = v1
+					}
 				} else {
-					if vv, ok := c.defaultValue[field]; ok {
-						args[i] = vv
+					if v3, ok := c.defaultValue[field]; ok {
+						args[i] = v3
 					} else { // this should not happen
 						args[i] = ""
 					}
@@ -419,6 +460,7 @@ func (c *ClickhouseOutput) innerFlush(events []map[string]interface{}) {
 				glog.Errorf("exec clickhouse insert %v error: %s", event, err)
 				return
 			}
+			//}
 		}
 
 		if err := tx.Commit(); err != nil {
@@ -517,4 +559,267 @@ func (c *ClickhouseOutput) Shutdown() {
 		c.closeChan <- true
 	}
 	c.awaitclose(30 * time.Second)
+}
+
+/* 2022.3.2 新增
+ck数据类型转换
+*/
+func convertCkType(ckType string, val interface{}) (out interface{}, err error) {
+	switch ckType {
+	case "Int32":
+		{
+			switch val.(type) {
+			case json.Number:
+				out, err = strconv.ParseInt(val.(json.Number).String(), 10, 32)
+				if err == nil {
+					return out, nil
+				}
+			case string:
+				out, err = strconv.ParseInt(val.(string), 10, 32)
+				if err == nil {
+					return out, nil
+				}
+			case bool:
+				if val.(bool) {
+					return 1, nil
+				}
+				return 0, nil
+			}
+		}
+
+	case "UInt32":
+		{
+			switch val.(type) {
+			case json.Number:
+				out, err = strconv.ParseUint(val.(json.Number).String(), 10, 32)
+				if err == nil {
+					return out, nil
+				}
+			case string:
+				out, err = strconv.ParseUint(val.(string), 10, 32)
+				if err == nil {
+					return out, nil
+				}
+			case bool:
+				if val.(bool) {
+					return 1, nil
+				}
+				return 0, nil
+			}
+		}
+
+	case "Int16":
+		{
+			switch val.(type) {
+			case json.Number:
+				out, err = strconv.ParseInt(val.(json.Number).String(), 10, 16)
+				if err == nil {
+					return out, nil
+				}
+			case string:
+				out, err = strconv.ParseInt(val.(string), 10, 16)
+				if err == nil {
+					return out, nil
+				}
+			case bool:
+				if val.(bool) {
+					return 1, nil
+				}
+				return 0, nil
+			}
+		}
+
+	case "UInt16":
+		{
+			switch val.(type) {
+			case json.Number:
+				out, err = strconv.ParseUint(val.(json.Number).String(), 10, 16)
+				if err == nil {
+					return out, nil
+				}
+			case string:
+				out, err = strconv.ParseUint(val.(string), 10, 16)
+				if err == nil {
+					return out, nil
+				}
+			case bool:
+				if val.(bool) {
+					return 1, nil
+				}
+				return 0, nil
+			}
+		}
+
+	case "Float32", "Decimal32":
+		{
+			switch val.(type) {
+			case json.Number:
+				out, err = strconv.ParseFloat(val.(json.Number).String(), 32)
+				if err == nil {
+					return out, nil
+				}
+			case string:
+				out, err = strconv.ParseFloat(val.(string), 32)
+				if err == nil {
+					return out, nil
+				}
+			case bool:
+				if val.(bool) {
+					return float32(1), nil
+				}
+				return float32(0), nil
+			}
+		}
+
+	case "Int8":
+		{
+			switch val.(type) {
+			case json.Number:
+				out, err = strconv.ParseInt(val.(json.Number).String(), 10, 8)
+				if err == nil {
+					return out, nil
+				}
+			case string:
+				out, err = strconv.ParseInt(val.(string), 10, 8)
+				if err == nil {
+					return out, nil
+				}
+			case bool:
+				if val.(bool) {
+					return 1, nil
+				}
+				return 0, nil
+			}
+		}
+
+	case "UInt8":
+		{
+			switch val.(type) {
+			case json.Number:
+				out, err = strconv.ParseUint(val.(json.Number).String(), 10, 8)
+				if err == nil {
+					return out, nil
+				}
+			case string:
+				out, err = strconv.ParseUint(val.(string), 10, 8)
+				if err == nil {
+					return out, nil
+				}
+			case bool:
+				if val.(bool) {
+					return 1, nil
+				}
+				return 0, nil
+			}
+		}
+
+	case "Int64":
+		{
+			switch val.(type) {
+			case json.Number:
+				out, err = strconv.ParseInt(val.(json.Number).String(), 10, 64)
+				if err == nil {
+					return out, nil
+				}
+			case string:
+				out, err = strconv.ParseInt(val.(string), 10, 64)
+				if err == nil {
+					return out, nil
+				}
+			case bool:
+				if val.(bool) {
+					return 1, nil
+				}
+				return 0, nil
+			}
+		}
+	case "UInt64":
+		{
+			switch val.(type) {
+			case json.Number:
+				out, err = strconv.ParseUint(val.(json.Number).String(), 10, 64)
+				if err == nil {
+					return out, nil
+				}
+			case string:
+				out, err = strconv.ParseUint(val.(string), 10, 64)
+				if err == nil {
+					return out, nil
+				}
+			case bool:
+				if val.(bool) {
+					return 1, nil
+				}
+				return 0, nil
+			}
+		}
+
+	case "Float64", "Decimal64":
+		{
+			switch val.(type) {
+			case json.Number:
+				out, err = strconv.ParseFloat(val.(json.Number).String(), 64)
+				if err == nil {
+					return out, nil
+				}
+			case string:
+				out, err = strconv.ParseFloat(val.(string), 64)
+				if err == nil {
+					return out, nil
+				}
+			case bool:
+				if val.(bool) {
+					return float64(1), nil
+				}
+				return float64(0), nil
+			}
+		}
+
+	case "Int256":
+		{
+			switch val.(type) {
+			case json.Number:
+				out, err = strconv.ParseInt(val.(json.Number).String(), 10, 256)
+				if err == nil {
+					return out, nil
+				}
+			case string:
+				out, err = strconv.ParseInt(val.(string), 10, 256)
+				if err == nil {
+					return out, nil
+				}
+			case bool:
+				if val.(bool) {
+					return 1, nil
+				}
+				return 0, nil
+			}
+		}
+
+	case "UInt256":
+		{
+			switch val.(type) {
+			case json.Number:
+				out, err = strconv.ParseUint(val.(json.Number).String(), 10, 256)
+				if err == nil {
+					return out, nil
+				}
+			case string:
+				out, err = strconv.ParseUint(val.(string), 10, 256)
+				if err == nil {
+					return out, nil
+				}
+			case bool:
+				if val.(bool) {
+					return 1, nil
+				}
+				return 0, nil
+			}
+		}
+	}
+
+	if err != nil {
+		glog.Fatalf("convertCkType parse default value `%v` error: %v", val, err)
+	}
+	return val, nil
 }

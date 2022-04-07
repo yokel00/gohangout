@@ -4,14 +4,15 @@ inputs:
   - Kafka:
       decorate_events: false
       topic:
-        syf_log_cdkey: 1
+        #syf_log_cdkey: 1
+        cdkey_log_test: 1
       #assign:
       #   weblog: [0,9]
       codec: json
       consumer_settings:
         bootstrap.servers: "113.125.74.232:9092"
         #bootstrap.servers: "kafka.banagame.com:9092"
-        group.id: gohangout.syf_log_cdkey1234
+        group.id: bana.172.16.0.1191
         max.partition.fetch.bytes: "10485760"
         auto.commit.interval.ms: "5000"
         from.beginning: "true"
@@ -39,16 +40,16 @@ filters:
   #      #- "UNIX_MS"
   #    #
 outputs:
-  - Stdout: {}
-  #- Clickhouse:
-  #    debug: true
-  #    table: "gamelog.syf_log_cdkey"
-  #    #conn_max_life_time: 1800
-  #    username: "default"
-  #    password: "qE92QEPUxNsGWQ2c"
-  #    hosts:
-  #      - "tcp://113.125.74.232:9000"
-  #    fields: ["log_time", "cdkey", "os", "action", "ip"]
-  #    bulk_actions: 20000
-  #    flush_interval: 30
-  #    concurrent: 1
+  #- Stdout: {}
+  - Clickhouse:
+      debug: true
+      table: "gamelog.cdkey_log"
+      #conn_max_life_time: 1800
+      #username: "default"
+      #password: "qE92QEPUxNsGWQ2c"
+      hosts:
+        - "tcp://127.0.0.1:9000"
+      #fields: ["log_time", "cdkey", "os", "action", "ip"]
+      bulk_actions: 20000
+      flush_interval: 30
+      concurrent: 1
